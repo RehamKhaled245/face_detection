@@ -1,16 +1,17 @@
 import streamlit as st
 import cv2
 import tempfile
-import dropbox
 import time
+import dropbox
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
-st.set_page_config(page_title="📸 Face Collector (Take Photo + Dropbox)", layout="centered")
+st.set_page_config(page_title="📸 Face Collector", layout="centered")
 
 st.title("📸 Face Collector")
 st.markdown("""
 ### How to use:
 1. Enter your full name (First, Middle, Last).  
-2. Click **Open Camera** to start the webcam.
+2. Click **Start Camera** to open webcam from your browser.
 3. Adjust your face in front of the camera.
 4. Click **Take Photo** to capture a single face image and save it to Dropbox.
 """)
@@ -31,45 +32,56 @@ def upload_to_dropbox(file_path, student_name, file_name):
     return dropbox_path
 
 # ---------- Streamlit Inputs ----------
-student_name = st.text_input("📝 Enter student name :")
+student_name = st.text_input("📝 Enter student name:")
 
-open_cam = st.button("📷 Open Camera")
-frame_placeholder = st.empty()
-
-# ---------- Session State ----------
-if "cap" not in st.session_state:
-    st.session_state.cap = None
 if "photo_count" not in st.session_state:
     st.session_state.photo_count = 0
+if "capturing" not in st.session_state:
+    st.session_state.capturing = False
 
-# ---------- Start webcam ----------
-if open_cam:
-    st.session_state.cap = cv2.VideoCapture(0)
-    st.success("✅ Camera opened! Adjust your face and click Take Photo.")
+# ---------- WebRTC Video ----------
+class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.frame = None
 
-if st.session_state.cap:
-    ret, frame = st.session_state.cap.read()
-    if ret:
-        st.markdown("**👀 Adjust your face in the frame before taking the photo.**")
-        frame_placeholder.image(frame, channels="BGR")
-    else:
-        st.error("⚠️ Cannot access webcam!")
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        self.frame = img
+        return frame
 
-# ---------- Take Photo Button ----------
-if st.button("📸 Take Photo"):
-    if not student_name:
-        st.error("⚠️ Please enter a student name first!")
-    elif st.session_state.cap is None:
-        st.error("⚠️ Open the camera first!")
-    else:
-        ret, frame = st.session_state.cap.read()
-        if ret:
+# ---------- Start / Stop Camera ----------
+col1, col2 = st.columns([1,1])
+
+with col1:
+    start_camera = st.button("▶️ Start Camera")
+with col2:
+    stop_camera = st.button("⏹ Stop Camera")
+
+if start_camera:
+    st.session_state.capturing = True
+if stop_camera:
+    st.session_state.capturing = False
+
+if st.session_state.capturing:
+    webrtc_ctx = webrtc_streamer(
+        key="face",
+        video_processor_factory=VideoProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True
+    )
+
+    # ---------- Take Photo ----------
+    if st.button("📸 Take Photo"):
+        if not student_name:
+            st.error("⚠️ Please enter a student name first!")
+        elif webrtc_ctx.video_processor is None or webrtc_ctx.video_processor.frame is None:
+            st.error("⚠️ No frame available! Make sure the camera is started.")
+        else:
+            img = webrtc_ctx.video_processor.frame.copy()
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                cv2.imwrite(tmp.name, frame)
+                cv2.imwrite(tmp.name, img)
                 file_name = f"{student_name}_{int(time.time())}.jpg"
                 dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
             st.session_state.photo_count += 1
             st.success(f"✅ Saved to Dropbox: {dropbox_path}")
             st.info(f"Total photos taken for {student_name}: {st.session_state.photo_count}")
-        else:
-            st.error("❌ Failed to capture image.")
