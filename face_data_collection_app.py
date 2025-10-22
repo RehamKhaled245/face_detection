@@ -12,9 +12,9 @@ st.title("📸 Face Collector")
 st.markdown("""
 ### How to use:
 1. Enter your full name (First, Middle, Last).  
-2. Click **Take a Photo** to open your camera.  
-3. Capture your face and click **Save photo**.  
-4. Your image will be uploaded to Dropbox automatically.
+2. Click **Take a Photo** to Save photo.  
+3.Your image will be uploaded to Dropbox automatically.
+4.Click **Clear Photo**  and Click **Take a Photo** to take another photo.
 """)
 
 # ---------- إعداد Dropbox ----------
@@ -51,3 +51,4 @@ if camera_image is not None and student_name:
 
 elif camera_image is not None and not student_name:
     st.warning("⚠️ Please enter your name before taking a photo!")
+
