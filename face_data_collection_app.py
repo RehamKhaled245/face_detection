@@ -3,20 +3,21 @@ import cv2
 import tempfile
 import dropbox
 import time
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
 
-# ---------- Page config ----------
+# ---------- Page Setup ----------
 st.set_page_config(page_title="📸 Face Collector", layout="centered")
+
 st.title("📸 Face Collector")
 st.markdown("""
 ### How to use:
 1. Enter your full name (First, Middle, Last).  
-2. Click **Start Camera** to open webcam from your browser.
-3. Adjust your face in front of the camera.
+2. Click **Start Camera** to open webcam.  
+3. Adjust your face in front of the camera.  
 4. Click **Take Photo** to capture a single face image and save it to Dropbox.
 """)
 
-# ---------- Dropbox setup ----------
+# ---------- Dropbox Setup ----------
 ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
 dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
@@ -31,27 +32,20 @@ def upload_to_dropbox(file_path, student_name, file_name):
         dbx.files_upload(f.read(), dropbox_path, mode=dropbox.files.WriteMode.overwrite)
     return dropbox_path
 
-# ---------- Streamlit Inputs ----------
-student_name = st.text_input("📝 Enter student name:")
+# ---------- Inputs ----------
+student_name = st.text_input("📝 Enter student name :")
 
-# ---------- Camera controls ----------
-cols = st.columns([1,1])
+# ---------- WebRTC Setup ----------
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
 if "capturing" not in st.session_state:
     st.session_state.capturing = False
-if "photo_count" not in st.session_state:
-    st.session_state.photo_count = 0
 if "last_frame" not in st.session_state:
     st.session_state.last_frame = None
-
-with cols[0]:
-    start_btn = st.button("▶️ Start Camera")
-with cols[1]:
-    stop_btn = st.button("⏹ Stop Camera")
-
-if start_btn:
-    st.session_state.capturing = True
-if stop_btn:
-    st.session_state.capturing = False
+if "photo_count" not in st.session_state:
+    st.session_state.photo_count = 0
 
 class VideoCaptureTransformer(VideoTransformerBase):
     def transform(self, frame):
@@ -59,16 +53,12 @@ class VideoCaptureTransformer(VideoTransformerBase):
         st.session_state.last_frame = img
         return img
 
-if st.session_state.capturing:
-    webrtc_streamer(
-        key="face-collector",
-        video_processor_factory=VideoCaptureTransformer,
-        media_stream_constraints={"video": True, "audio": False}
-    )
-
-# ---------- Take Photo ----------
-take_col, _ = st.columns([1,3])
-with take_col:
+# ---------- Buttons ----------
+col1, col2 = st.columns([1,1])
+with col1:
+    if st.button("📷 Start Camera"):
+        st.session_state.capturing = True
+with col2:
     if st.button("📸 Take Photo"):
         if not student_name:
             st.error("⚠️ Please enter a student name first!")
@@ -82,3 +72,11 @@ with take_col:
             st.session_state.photo_count += 1
             st.success(f"✅ Saved to Dropbox: {dropbox_path}")
             st.info(f"Total photos taken for {student_name}: {st.session_state.photo_count}")
+
+# ---------- WebRTC Stream ----------
+if st.session_state.capturing:
+    webrtc_streamer(
+        key="face-collector",
+        video_processor_factory=VideoCaptureTransformer,
+        rtc_configuration=RTC_CONFIGURATION
+    )
