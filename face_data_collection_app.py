@@ -5,14 +5,15 @@ import time
 import dropbox
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
+# ---------- Page Setup ----------
 st.set_page_config(page_title="📸 Face Collector", layout="centered")
 
 st.title("📸 Face Collector")
 st.markdown("""
 ### How to use:
 1. Enter your full name (First, Middle, Last).  
-2. Click **Start Camera** to open webcam from your browser.
-3. Adjust your face in front of the camera.
+2. Click **Start Camera** to open webcam from your browser.  
+3. Adjust your face in front of the camera.  
 4. Click **Take Photo** to capture a single face image and save it to Dropbox.
 """)
 
@@ -31,7 +32,7 @@ def upload_to_dropbox(file_path, student_name, file_name):
         dbx.files_upload(f.read(), dropbox_path, mode=dropbox.files.WriteMode.overwrite)
     return dropbox_path
 
-# ---------- Streamlit Inputs ----------
+# ---------- User Input ----------
 student_name = st.text_input("📝 Enter student name:")
 
 if "photo_count" not in st.session_state:
@@ -39,7 +40,7 @@ if "photo_count" not in st.session_state:
 if "capturing" not in st.session_state:
     st.session_state.capturing = False
 
-# ---------- WebRTC Video ----------
+# ---------- Video Processor ----------
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame = None
@@ -49,8 +50,8 @@ class VideoProcessor(VideoProcessorBase):
         self.frame = img
         return frame
 
-# ---------- Start / Stop Camera ----------
-col1, col2 = st.columns([1,1])
+# ---------- Buttons ----------
+col1, col2 = st.columns([1, 1])
 
 with col1:
     start_camera = st.button("▶️ Start Camera")
@@ -62,15 +63,21 @@ if start_camera:
 if stop_camera:
     st.session_state.capturing = False
 
+# ---------- WebRTC with STUN config ----------
 if st.session_state.capturing:
     webrtc_ctx = webrtc_streamer(
         key="face",
         video_processor_factory=VideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
-        async_processing=True
+        async_processing=True,
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},  # Free STUN server
+            ]
+        },
     )
 
-    # ---------- Take Photo ----------
+    # ---------- Capture & Upload ----------
     if st.button("📸 Take Photo"):
         if not student_name:
             st.error("⚠️ Please enter a student name first!")
@@ -82,6 +89,8 @@ if st.session_state.capturing:
                 cv2.imwrite(tmp.name, img)
                 file_name = f"{student_name}_{int(time.time())}.jpg"
                 dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
+
             st.session_state.photo_count += 1
             st.success(f"✅ Saved to Dropbox: {dropbox_path}")
-            st.info(f"Total photos taken for {student_name}: {st.session_state.photo_count}")
+            st.info(f"📷 Total photos taken for {student_name}: {st.session_state.photo_count}")
+
