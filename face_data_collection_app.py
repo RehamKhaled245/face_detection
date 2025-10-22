@@ -10,12 +10,17 @@ st.set_page_config(page_title="📸 Face Collector", layout="centered")
 
 st.title("📸 Face Collector")
 st.markdown("""
-### How to use:
-1. Enter your full name (First, Middle, Last).  
-2. Click **Take a Photo** to Save photo.  
-3.Your image will be uploaded to Dropbox automatically.
-4.Click **Clear Photo**  and Click **Take a Photo** to take another photo.
-""")
+<div style="background-color:#f8f9fa;padding:20px;border-radius:10px;border:1px solid #ddd;">
+<h3 style="color:#2c3e50;">📸 How to Use the App</h3>
+<ol style="line-height:1.8;">
+<li><b>Enter your full name</b> — First, Middle, and Last name.</li>
+<li>Click <b>Take a Photo</b> to capture and save your image.</li>
+<li>Your image will be <b>automatically uploaded</b> to Dropbox.</li>
+<li>To retake, click <b>Clear Photo</b> and then <b>Take a Photo</b> again.</li>
+</ol>
+</div>
+""", unsafe_allow_html=True)
+
 
 # ---------- إعداد Dropbox ----------
 ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
@@ -51,4 +56,5 @@ if camera_image is not None and student_name:
 
 elif camera_image is not None and not student_name:
     st.warning("⚠️ Please enter your name before taking a photo!")
+
 
