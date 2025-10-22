@@ -5,7 +5,7 @@ import time
 import dropbox
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
-# ---------- Page Setup ----------
+# ---------------- Page Config ----------------
 st.set_page_config(page_title="📸 Face Collector", layout="centered")
 
 st.title("📸 Face Collector")
@@ -14,10 +14,11 @@ st.markdown("""
 1. Enter your full name (First, Middle, Last).  
 2. Click **Start Camera** to open webcam from your browser.  
 3. Adjust your face in front of the camera.  
-4. Click **Take Photo** to capture a single face image and save it to Dropbox.
+4. Click **Take Photo** to capture and save it to Dropbox.  
+   *(If camera doesn’t work, you can upload manually below.)*
 """)
 
-# ---------- Dropbox setup ----------
+# ---------------- Dropbox Setup ----------------
 ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
 dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
@@ -32,7 +33,7 @@ def upload_to_dropbox(file_path, student_name, file_name):
         dbx.files_upload(f.read(), dropbox_path, mode=dropbox.files.WriteMode.overwrite)
     return dropbox_path
 
-# ---------- User Input ----------
+# ---------------- User Input ----------------
 student_name = st.text_input("📝 Enter student name:")
 
 if "photo_count" not in st.session_state:
@@ -40,7 +41,7 @@ if "photo_count" not in st.session_state:
 if "capturing" not in st.session_state:
     st.session_state.capturing = False
 
-# ---------- Video Processor ----------
+# ---------------- Video Processor ----------------
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame = None
@@ -50,7 +51,7 @@ class VideoProcessor(VideoProcessorBase):
         self.frame = img
         return frame
 
-# ---------- Buttons ----------
+# ---------------- Start / Stop Camera ----------------
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -63,9 +64,9 @@ if start_camera:
 if stop_camera:
     st.session_state.capturing = False
 
-# ---------- WebRTC with STUN config ----------
+webrtc_ctx = None
 if st.session_state.capturing:
-      webrtc_ctx = webrtc_streamer(
+    webrtc_ctx = webrtc_streamer(
         key="face",
         video_processor_factory=VideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
@@ -82,22 +83,33 @@ if st.session_state.capturing:
         }
     )
 
+# ---------------- Take Photo ----------------
+if st.button("📸 Take Photo"):
+    if not student_name:
+        st.error("⚠️ Please enter a student name first!")
+    elif webrtc_ctx is None or webrtc_ctx.video_processor is None or webrtc_ctx.video_processor.frame is None:
+        st.warning("⚠️ Camera not available! You can upload manually below.")
+    else:
+        img = webrtc_ctx.video_processor.frame.copy()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            cv2.imwrite(tmp.name, img)
+            file_name = f"{student_name}_{int(time.time())}.jpg"
+            dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
+        st.session_state.photo_count += 1
+        st.success(f"✅ Saved to Dropbox: {dropbox_path}")
+        st.info(f"Total photos taken for {student_name}: {st.session_state.photo_count}")
 
-    # ---------- Capture & Upload ----------
-    if st.button("📸 Take Photo"):
-        if not student_name:
-            st.error("⚠️ Please enter a student name first!")
-        elif webrtc_ctx.video_processor is None or webrtc_ctx.video_processor.frame is None:
-            st.error("⚠️ No frame available! Make sure the camera is started.")
-        else:
-            img = webrtc_ctx.video_processor.frame.copy()
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                cv2.imwrite(tmp.name, img)
-                file_name = f"{student_name}_{int(time.time())}.jpg"
-                dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
+# ---------------- Manual Upload (Backup Option) ----------------
+st.markdown("---")
+st.subheader("📤 Upload manually if camera doesn't work")
 
-            st.session_state.photo_count += 1
-            st.success(f"✅ Saved to Dropbox: {dropbox_path}")
-            st.info(f"📷 Total photos taken for {student_name}: {st.session_state.photo_count}")
-
-
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+if uploaded_file is not None:
+    if not student_name:
+        st.error("⚠️ Please enter a student name first!")
+    else:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            tmp.write(uploaded_file.read())
+            file_name = f"{student_name}_{int(time.time())}_manual.jpg"
+            dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
+        st.success(f"✅ Uploaded to Dropbox: {dropbox_path}")
