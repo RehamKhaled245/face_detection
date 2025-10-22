@@ -3,26 +3,26 @@ import cv2
 import tempfile
 import time
 import dropbox
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 
-# ---------------- Page Config ----------------
-st.set_page_config(page_title="📸 Face Collector", layout="centered")
+# إعداد صفحة التطبيق
+st.set_page_config(page_title="📸 Face Collector (Cloud)", layout="centered")
 
-st.title("📸 Face Collector")
+st.title("📸 Face Collector (Streamlit Cloud)")
 st.markdown("""
-### How to use:
-1. Enter your full name (First, Middle, Last).  
-2. Click **Start Camera** to open webcam from your browser.  
-3. Adjust your face in front of the camera.  
-4. Click **Take Photo** to capture and save it to Dropbox.  
-   *(If camera doesn’t work, you can upload manually below.)*
+### 🧠 How to use:
+1. Enter your full name below.  
+2. Click **Start Camera** to open your webcam.  
+3. Position your face in front of the camera.  
+4. Click **📸 Capture** to save the photo to Dropbox.
 """)
 
-# ---------------- Dropbox Setup ----------------
+# ---------- إعداد Dropbox ----------
 ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
 dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
 def upload_to_dropbox(file_path, student_name, file_name):
+    """رفع الصورة إلى مجلد Dropbox باسم الطالب"""
     dropbox_folder = f"/{student_name}"
     try:
         dbx.files_get_metadata(dropbox_folder)
@@ -33,15 +33,14 @@ def upload_to_dropbox(file_path, student_name, file_name):
         dbx.files_upload(f.read(), dropbox_path, mode=dropbox.files.WriteMode.overwrite)
     return dropbox_path
 
-# ---------------- User Input ----------------
-student_name = st.text_input("📝 Enter student name:")
 
+# ---------- مدخلات المستخدم ----------
+student_name = st.text_input("📝 Enter student name:")
 if "photo_count" not in st.session_state:
     st.session_state.photo_count = 0
-if "capturing" not in st.session_state:
-    st.session_state.capturing = False
 
-# ---------------- Video Processor ----------------
+
+# ---------- كلاس معالجة الفيديو ----------
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame = None
@@ -51,44 +50,27 @@ class VideoProcessor(VideoProcessorBase):
         self.frame = img
         return frame
 
-# ---------------- Start / Stop Camera ----------------
-col1, col2 = st.columns([1, 1])
 
-with col1:
-    start_camera = st.button("▶️ Start Camera")
-with col2:
-    stop_camera = st.button("⏹ Stop Camera")
+# ---------- إعداد WebRTC (Cloud Friendly) ----------
+webrtc_ctx = webrtc_streamer(
+    key="reham-face-cloud",
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=VideoProcessor,
+    media_stream_constraints={"video": True, "audio": False},
+    rtc_configuration={
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},  # سيرفر STUN من Google
+        ]
+    },
+    async_processing=True,
+)
 
-if start_camera:
-    st.session_state.capturing = True
-if stop_camera:
-    st.session_state.capturing = False
-
-webrtc_ctx = None
-if st.session_state.capturing:
-    webrtc_ctx = webrtc_streamer(
-        key="face",
-        video_processor_factory=VideoProcessor,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
-        rtc_configuration={
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {
-                    "urls": ["turn:relay.metered.ca:80", "turn:relay.metered.ca:443"],
-                    "username": "openai",
-                    "credential": "openai"
-                }
-            ]
-        }
-    )
-
-# ---------------- Take Photo ----------------
-if st.button("📸 Take Photo"):
+# ---------- زر التقاط الصور ----------
+if st.button("📸 Capture Photo"):
     if not student_name:
-        st.error("⚠️ Please enter a student name first!")
-    elif webrtc_ctx is None or webrtc_ctx.video_processor is None or webrtc_ctx.video_processor.frame is None:
-        st.warning("⚠️ Camera not available! You can upload manually below.")
+        st.error("⚠️ Please enter your name first!")
+    elif not webrtc_ctx or not webrtc_ctx.video_processor or webrtc_ctx.video_processor.frame is None:
+        st.error("⚠️ No frame detected! Make sure camera is started.")
     else:
         img = webrtc_ctx.video_processor.frame.copy()
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
@@ -96,20 +78,5 @@ if st.button("📸 Take Photo"):
             file_name = f"{student_name}_{int(time.time())}.jpg"
             dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
         st.session_state.photo_count += 1
-        st.success(f"✅ Saved to Dropbox: {dropbox_path}")
-        st.info(f"Total photos taken for {student_name}: {st.session_state.photo_count}")
-
-# ---------------- Manual Upload (Backup Option) ----------------
-st.markdown("---")
-st.subheader("📤 Upload manually if camera doesn't work")
-
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-if uploaded_file is not None:
-    if not student_name:
-        st.error("⚠️ Please enter a student name first!")
-    else:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-            tmp.write(uploaded_file.read())
-            file_name = f"{student_name}_{int(time.time())}_manual.jpg"
-            dropbox_path = upload_to_dropbox(tmp.name, student_name, file_name)
-        st.success(f"✅ Uploaded to Dropbox: {dropbox_path}")
+        st.success(f"✅ Photo saved to Dropbox: {dropbox_path}")
+        st.info(f"Total photos for {student_name}: {st.session_state.photo_count}")
