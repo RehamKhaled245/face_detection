@@ -65,17 +65,23 @@ if stop_camera:
 
 # ---------- WebRTC with STUN config ----------
 if st.session_state.capturing:
-    webrtc_ctx = webrtc_streamer(
+      webrtc_ctx = webrtc_streamer(
         key="face",
         video_processor_factory=VideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True,
         rtc_configuration={
             "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},  # Free STUN server
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {
+                    "urls": ["turn:relay.metered.ca:80", "turn:relay.metered.ca:443"],
+                    "username": "openai",
+                    "credential": "openai"
+                }
             ]
-        },
+        }
     )
+
 
     # ---------- Capture & Upload ----------
     if st.button("📸 Take Photo"):
@@ -93,4 +99,5 @@ if st.session_state.capturing:
             st.session_state.photo_count += 1
             st.success(f"✅ Saved to Dropbox: {dropbox_path}")
             st.info(f"📷 Total photos taken for {student_name}: {st.session_state.photo_count}")
+
 
