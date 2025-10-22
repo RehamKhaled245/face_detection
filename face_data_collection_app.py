@@ -10,7 +10,7 @@ st.set_page_config(page_title="📸 Face Collector", layout="centered")
 
 st.title("📸 Face Collector")
 st.markdown("""
-<div style="background-color:#f8f9fa;padding:20px;border-radius:10px;border:1px solid #ddd;">
+<div style="background-color:#000000;padding:20px;border-radius:10px;border:1px solid #ddd;">
 <h3 style="color:#2c3e50;">📸 How to Use the App</h3>
 <ol style="line-height:1.8;">
 <li><b>Enter your full name</b> — First, Middle, and Last name.</li>
@@ -56,5 +56,6 @@ if camera_image is not None and student_name:
 
 elif camera_image is not None and not student_name:
     st.warning("⚠️ Please enter your name before taking a photo!")
+
 
 
